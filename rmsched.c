@@ -447,7 +447,8 @@ void bubbleSort(int n)
     // One pass of bubble sort. After
     // this pass, the largest element
     // is moved (or bubbled) to end.
-    for (int i = 0; i < n - 1; i++)
+    int i;
+    for (i = 0; i < n - 1; i++)
 		{
       if (t[i].per > t[i+1].per)
 			{
