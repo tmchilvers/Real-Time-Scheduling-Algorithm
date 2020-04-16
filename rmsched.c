@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
 	//	Start the scheduler program
   checkSche();
 	scheduler();
-	fflush(stdout);
+	//fflush(stdout);
 
 	//	--------------------------------------------------------------------------
 	//	Allow remaining threads to exit
@@ -249,6 +249,7 @@ void *task(void *vargp)
 		//	Write name of thread to file
 		sprintf(str, "%s ", t[id].name);
 		write(sched, str, strlen(str));
+    //fflush(stdout);
 
 		//	Release the semaphore controler
 		sem_post(semCon);
@@ -267,7 +268,8 @@ void checkSche()
 {
   float sum = 0.0;  // sum of each task
   float finalSum = 0.0; //  sum of all the tasks
-  for(int i = 0; i < numTasks; i++)
+  int i;
+  for(i = 0; i < numTasks; i++)
   {
     sum = ((float)t[i].wcet / (float)t[i].per);
     finalSum += sum;
@@ -300,17 +302,18 @@ void scheduler()
 	writeTime();
 
 	//----------------------------------------------------------------------------
-	int cont = 1;	//	allow
-	for(int n = 0; n < nper; n++)
+	int cont = 1;	//	allow loop to continue
+  int n, i, j, k, l, m;
+  for(n = 0; n < nper; n++)
 	{
 		//	Main loop - Loop until ticks have reached the lcm
 		while(ticks != lcm)
 		{
 			//	Loop through the sorted tasks
-			for(int i = 0; i < numTasks; i++)
+			for(i = 0; i < numTasks; i++)
 			{
 				//	loop through number of remaining ticks until thread's wcet is reached
-				for(int j = t[i].loc; j < t[i].wcet; j++)
+				for(j = t[i].loc; j < t[i].wcet; j++)
 				{
 					sem_post(&sem[i]);	//	unlock determined thread
 					sem_wait(semCon);	//	wait until thread gives access back to main loop
@@ -321,7 +324,7 @@ void scheduler()
 
 					//	Iterate all threads' counters and check if any have reach their
 					//	period, if so then break out.
-					for(int k = 0; k < numTasks; k++)
+					for(k = 0; k < numTasks; k++)
 					{
 						t[k].counter++;
 						if(t[k].counter == t[k].per)
@@ -345,29 +348,29 @@ void scheduler()
 			}
 
 			//	Continue iterating counters even if WCET has been reached
-			for(int k = 0; k < numTasks; k++)
+			for(l = 0; l < numTasks; l++)
 			{
-				t[k].counter++;
-				if(t[k].counter == t[k].per)
+				t[l].counter++;
+				if(t[l].counter == t[l].per)
 				{
 					//	Reset thread's values if it has reached end of its period
-					t[k].loc = 0;
-					t[k].counter = 0;
+					t[l].loc = 0;
+					t[l].counter = 0;
 				}
 			}
 
 			//	Write blank if no thread needs to be called
 			write(sched, "-- ", strlen("-- "));
-			fflush(stdout);
+			//fflush(stdout);
 			//	Iterate clock ticks
 			ticks++;
 		}
 
 		//	Reset all thread's values when starting next hyperperiod
-		for(int k = 0; k < numTasks; k++)
+		for(m = 0; m < numTasks; m++)
 		{
-			t[k].loc = 0;
-			t[k].counter = 0;
+			t[m].loc = 0;
+			t[m].counter = 0;
 			ticks = 0;
 		}
 		write(sched, "\n", strlen("\n"));
@@ -385,7 +388,8 @@ void scheduler()
 //	Write number of ticks of the hyperperiod at top of file
 void writeTime()
 {
-	for (int i = 0; i < lcm; i++)
+  int i;
+	for (i = 0; i < lcm; i++)
 	{
 		//	For numbers of two digits, remove one space to make it easier to read
 		if(i > 9)
@@ -423,7 +427,8 @@ int findLCM()
 
     // ans contains LCM of arr[0], ..arr[i]
     // after i'th iteration,
-    for (int i = 1; i < numTasks; i++)
+    int i;
+    for (i = 1; i < numTasks; i++)
         ans = (((t[i].per * ans)) / (gcd(t[i].per, ans)));
 
     return ans;
