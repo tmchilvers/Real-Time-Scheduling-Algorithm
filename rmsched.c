@@ -182,7 +182,8 @@ int main(int argc, char *argv[])
 
 	//	--------------------------------------------------------------------------
 	//	Set all thread semaphores to 0, locked
-	for (int i = 0; i < nper; i++)
+  int i;
+	for (i = 0; i < nper; i++)
 	{
 		sem_init(&sem[0], 0, 0);
 	}
@@ -190,7 +191,7 @@ int main(int argc, char *argv[])
 	sem_init(semCon, 0 , 0);
 
 	//	Create n threads
-	for (int i = 0; i < nper; i++)
+	for (i = 0; i < nper; i++)
 	{
 		int* id = malloc(sizeof(int));	// grabs current i, if code not here it'd be off by 1
 		*id = i;
@@ -205,11 +206,11 @@ int main(int argc, char *argv[])
 
 	//	--------------------------------------------------------------------------
 	//	Allow remaining threads to exit
-	for (int i = 0; i < nper; i++)
+	for (i = 0; i < nper; i++)
 			sem_post(&sem[i]);
 
 	//	Join n threads
-	for (int i = 0; i < nper; i++)
+	for (i = 0; i < nper; i++)
 		pthread_join(pt[i], NULL);
 
 	//	CLEANUP ==================================================================
