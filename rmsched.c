@@ -64,6 +64,7 @@ typedef struct taskProc{
     int wcet;	//	The WCET of task
     int per;	//	The period length of task
     int loc;	// 	The current location (how much time has passed) within task
+    int counter;
 } taskProc;
 
 
@@ -79,23 +80,20 @@ int main(int argc, char *argv[])
 	t = malloc(sizeof(taskProc)*numTasks);
 	t[0].name = "T1";
 	t[0].wcet = 2;
-	t[0].per = 20;
+	t[0].per = 6;
 
 	t[1].name = "T2";
 	t[1].wcet = 3;
-	t[1].per = 5;
+	t[1].per = 12;
 
 	t[2].name = "T3";
 	t[2].wcet = 6;
-	t[2].per = 10;
+	t[2].per = 24;
 
 	for(int i = 0; i < numTasks; i++)
 	{
 		prior[i] = t[i].per;
 	}
-	//printf("0 name: %s, wcet: %d, per: %d\n", t[0].name, t[0].wcet, t[0].per);
-	//printf("1 name: %s, wcet: %d, per: %d\n", t[1].name, t[1].wcet, t[1].per);
-	//printf("2 name: %s, wcet: %d, per: %d\n", t[2].name, t[2].wcet, t[2].per);
 
 	//	ERROR CHECK ==============================================================
 	//	No Input
@@ -169,17 +167,6 @@ int main(int argc, char *argv[])
 		pthread_join(pt[i], NULL);
 	}
 
-	//	==========================================================================
-	//	FILE OUTPUT
-
-	//	Write number of ticks of the hyperperiod at top of file
-	for (int i = 0; i < lcm; i++)
-	{
-		sprintf(str, "%d  ", i);
-		write(sched, str, strlen(str));
-	}
-	write(sched, "\n", strlen("\n"));
-
 
 	//	CLEANUP ==================================================================
 	free(t);	//	Free the thread memory
@@ -224,17 +211,89 @@ void scheduler()
 {
 	//	Calculate LCM of tasks' periods
 	lcm = findLCM();
+	//	Sort the tasks and prioritize by least period time
 	bubbleSort(numTasks);
 
-	//	Main loop
-	while(curr != nper)
+
+	//	Write number of ticks of the hyperperiod at top of file
+	for (int i = 0; i < lcm; i++)
 	{
-		sem_post(&sem[curr]);	//	unlock curr thread
-		sem_wait(semCon);	//	wait until thread gives main loop access
-		curr++;
-		ticks++;
-		printf("TICKS: %d\n", ticks);
+		if(i > 9)
+		{
+			sprintf(str, "%d ", i);
+			write(sched, str, strlen(str));
+		}
+		else
+		{
+			sprintf(str, "%d  ", i);
+			write(sched, str, strlen(str));
+		}
 	}
+	write(sched, "\n", strlen("\n"));
+
+
+	int cont = 1;
+	//int counter = 0;
+	//int currTask = prior[0].wcet;
+	//	Main loop - Loop until ticks have reached the lcm
+	while(ticks != lcm)
+	{
+		//	Loop through the sorted tasks
+		for(int i = 0; i < numTasks; i++)
+		{
+			//	loop through number of remaining ticks until wcet is reached
+			for(int j = t[i].loc; j < t[i].wcet; j++)
+			{
+				sprintf(str, "%s ", t[i].name);
+				write(sched, str, strlen(str));
+				fflush(stdout);
+				ticks++;
+				t[i].loc++;
+
+				for(int k = 0; k < numTasks; k++)
+				{
+					t[k].counter++;
+					//printf("Task %s counter is %d time: %d\n", t[k].name, t[k].counter, ticks);
+					if(t[k].counter == t[k].per)
+					{
+						//printf("Task %s reached its period at time: %d\n", t[k].name, ticks);
+						t[k].loc = 0;
+						t[k].counter = 0;
+						i = -1;
+						cont = 0;
+						//break;
+					}
+				}
+
+				if(cont == 0)
+				{
+					cont = 1;
+					break;
+				}
+			}
+		}
+
+		for(int k = 0; k < numTasks; k++)
+		{
+			t[k].counter++;
+			if(t[k].counter == t[k].per)
+			{
+				t[k].loc = 0;
+				t[k].counter = 0;
+				//i = -1;
+			}
+		}
+		//sprintf(str, "%s ");
+		write(sched, "--", strlen(str));
+		fflush(stdout);
+		ticks++;
+
+		//sem_post(&sem[curr]);	//	unlock curr thread
+		//sem_wait(semCon);	//	wait until thread gives main loop access
+
+		//printf("TICKS: %d\n", ticks);
+	}
+	write(sched, "\n", strlen(str));
 	printf("scheduler says quit\n");
 	curr = -1;
 }
@@ -280,11 +339,11 @@ void bubbleSort(int n)
     // is moved (or bubbled) to end.
     for (int i = 0; i < n - 1; i++)
 		{
-      if (prior[i] > prior[i+1])
+      if (t[i].per > t[i+1].per)
 			{
-				int temp = prior[i];
-				prior[i] = prior[i+1];
-				prior[i+1] = temp;
+				struct taskProc temp = t[i];
+				t[i] = t[i+1];
+				t[i+1] = temp;
 			}
 		}
 
