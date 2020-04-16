@@ -4,10 +4,24 @@
 * Email: chilvers@chapman.edu
 *
 *	References:
+*     HELPER METHODS:
 *			- https://www.geeksforgeeks.org/lcm-of-given-array-elements/
 *			- https://www.geeksforgeeks.org/recursive-bubble-sort/
-* 		- As well as all example files available on blackboard.
 *
+*     GENERAL MULTITHREADING:
+*     - https://www.geeksforgeeks.org/multithreading-c-2/
+*     - https://www.tutorialspoint.com/multithreading-in-c
+*     - http://www.csc.villanova.edu/~mdamian/threads/posixsem.html
+*
+*     GENERAL POINTER DEBUGGING:
+*     - https://www.codeproject.com/Questions/634865/ERROR-dereferencing-pointer-to-incomplete-type
+*     - http://www.cplusplus.com/reference/cstdio/sscanf/
+*     - https://stackoverflow.com/questions/32366665/resetting-pointer-to-the-start-of-file/32366729
+*     - https://stackoverflow.com/questions/481673/make-a-copy-of-a-char
+*     - https://www.geeksforgeeks.org/sum-array-using-pthreads/
+*
+* 		- As well as files available on blackboard.
+*     - Collaborative help from classmates: Alex Rigl and Filip Augustowski
 */
 
 #include <unistd.h>
@@ -265,7 +279,7 @@ void checkSche()
     printf("Schedule is not possible.\n");
     free(t);	//	Free the thread memory
   	free(sem);	//	Free the thread semaphores memory
-    close(sched); //  Close the schedule file    
+    close(sched); //  Close the schedule file
     exit(EXIT_FAILURE);
   }
 }
@@ -343,7 +357,7 @@ void scheduler()
 			}
 
 			//	Write blank if no thread needs to be called
-			write(sched, "--", strlen(str));
+			write(sched, "-- ", strlen("-- "));
 			fflush(stdout);
 			//	Iterate clock ticks
 			ticks++;
@@ -356,9 +370,9 @@ void scheduler()
 			t[k].counter = 0;
 			ticks = 0;
 		}
-		write(sched, "\n", strlen(str));
+		write(sched, "\n", strlen("\n"));
 	}
-	write(sched, "\n", strlen(str));
+	write(sched, "\n", strlen("\n"));
 	printf("Scheduler has finished successfully.\n");
 	curr = -1;	//	Tell threads to exit
 }
