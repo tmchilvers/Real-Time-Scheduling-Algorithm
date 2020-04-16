@@ -24,7 +24,7 @@
 //	GLOBAL VARIABLES
 //
 int nper;	//	Number of hyperperiods
-int taskSet;	//	File for task set
+//int taskSet;	//	File for task set
 int sched;	//	File for scheduler
 int ticks = 0;	//	Number of computer ticks
 int curr = 0;	//	current thread to run
@@ -52,6 +52,12 @@ void *task(void *vargp);
 //					processes via threads. It will call a thread to write to an output
 //					file.
 void scheduler();
+
+//  checkSche();
+//	Input: None, uses global variables.
+//	Output:	Checks if schedulable based off of the formula:
+//              C1/P1 + C2/P2 + . . . + Cn/Pn < 1
+void checkSche();
 
 //	HELPER METHODS	------------------------------------------------------------
 
@@ -82,36 +88,8 @@ typedef struct taskProc{
 //
 int main(int argc, char *argv[])
 {
-	//	The thread identifiers
+  //	The thread identifiers
 	pthread_t* pt;	//	task thread
-
-	FILE* taskSet;	//	Input file
-  taskSet = fopen(argv[2], "r");	//	Open the file
-	char fl[32], name[2];	//	Character buffers for file search
-	int x = 0;	//	iterator for file
-	int wcet, period;	//	temp values for data from file
-
-	//	Count number of tasks in file
-	while (fgets(fl, 32, taskSet) != NULL) {
-		numTasks++;
-	}
-
-	//	Allocate memory of task object for the number of tasks found
-	t = malloc(sizeof(taskProc)*numTasks);
-
-	//	Reset file pointer to beginning
-	rewind(taskSet);
-
-	//	Read data from each line of file
-	while (fgets(fl, 32, taskSet) != NULL) {
-		sscanf(fl, "%s %d %d", name, &wcet, &period);
-		t[x].name = name;
-		t[x].wcet = wcet;
-		t[x].per = period;
-		x++;
-	}
-
-	fclose(taskSet);
 
 	//	ERROR CHECK ==============================================================
 	//	No Input
@@ -130,8 +108,6 @@ int main(int argc, char *argv[])
 	//	Cast user inputs to int and save to global variables
 	nper = atoi(argv[1]);	//	grab number of hyperperiods
 
-
-
 	sched = creat(argv[3], O_WRONLY | O_APPEND);
 	if (sched == -1)
   {
@@ -139,6 +115,49 @@ int main(int argc, char *argv[])
     printf("       Please check if the file exists and is entered correctly.\n");
     exit(EXIT_FAILURE);
   }
+
+	FILE* taskSet;	//	Input file
+  if((taskSet = fopen(argv[2], "r")) == NULL)	//	Open the file
+  {
+    printf("ERROR: Task Set file cannot be opened \n");
+    exit(EXIT_FAILURE);
+  }
+
+  //  --------------------------------------------------------------------------
+  //  Input File Management
+	char fl[32];
+
+  char* name = malloc(sizeof(char)*2);	//	Character buffers for file search
+	int x = 0;	//	iterator for file
+	int wcet, period;	//	temp values for data from file
+
+	//	Count number of tasks in file
+	while (fgets(fl, 32, taskSet) != NULL) {
+		numTasks++;
+	}
+
+	//	Allocate memory of task object for the number of tasks found
+	t = malloc(sizeof(taskProc)*numTasks);
+
+	//	Reset file pointer to beginning
+	rewind(taskSet);
+
+	//	Read data from each line of file
+	while (fgets(fl, 32, taskSet) != NULL) {
+		sscanf(fl, "%s %d %d", name, &wcet, &period);
+
+    char* temp = malloc(sizeof(name));
+    strcpy(temp, name);
+
+    t[x].name = temp;
+		t[x].wcet = wcet;
+		t[x].per = period;
+		x++;
+	}
+
+  //  Close the input file
+	fclose(taskSet);
+
 
 	//	INITIALIZATION ===========================================================
 	//	Allocate memory for semaphores
@@ -166,6 +185,7 @@ int main(int argc, char *argv[])
 
 	//	--------------------------------------------------------------------------
 	//	Start the scheduler program
+  checkSche();
 	scheduler();
 	fflush(stdout);
 
@@ -181,6 +201,7 @@ int main(int argc, char *argv[])
 	//	CLEANUP ==================================================================
 	free(t);	//	Free the thread memory
 	free(sem);	//	Free the thread semaphores memory
+  close(sched);
 
 	return 0;
 }
@@ -221,6 +242,32 @@ void *task(void *vargp)
 
 	free(vargp);	//	Free passed argument memory
 	pthread_exit(0);
+}
+
+//	============================================================================
+//	Input: None, uses global variables.
+//	Output:	Checks if schedulable based off of the formula:
+//              C1/P1 + C2/P2 + . . . + Cn/Pn < 1
+//
+void checkSche()
+{
+  float sum = 0.0;  // sum of each task
+  float finalSum = 0.0; //  sum of all the tasks
+  for(int i = 0; i < numTasks; i++)
+  {
+    sum = ((float)t[i].wcet / (float)t[i].per);
+    finalSum += sum;
+  }
+
+  //  Abort program if sum is less than 1
+  if(finalSum > 1)
+  {
+    printf("Schedule is not possible.\n");
+    free(t);	//	Free the thread memory
+  	free(sem);	//	Free the thread semaphores memory
+    close(sched); //  Close the schedule file    
+    exit(EXIT_FAILURE);
+  }
 }
 
 //	============================================================================
