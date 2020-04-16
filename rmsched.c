@@ -28,33 +28,42 @@ int taskSet;	//	File for task set
 int sched;	//	File for scheduler
 int ticks = 0;	//	Number of computer ticks
 int curr = 0;	//	current thread to run
-int numTasks = 3;
+int numTasks = 0;
 int lcm;
 
 char str[32];	//	String variable
 sem_t* sem;	//	semaphore: allow multiple threads to access the shared memory
 sem_t* semCon;	//	semaphore than controls the multiple threads semaphore
 struct taskProc* t;	//	each task is of type of taskProc
-int* prior;
+
 
 //	============================================================================
 //	FUNCTION DECLARATIONS
 //
 
-//	task:
-//	Input: None
-//	Output:	None.
+//	task():
+//	Input: Argument from thread creation.
+//	Output:	Write thread ID to output file when called by scheduler.
 void *task(void *vargp);
 
-//	scheduler:
-//	Input: None.
-//	Output: None.
+//	scheduler():
+//	Input: Use global variables.
+//	Output: Implements Rate-Monotonic Scheduler Algorithm to simulate multiple
+//					processes via threads. It will call a thread to write to an output
+//					file.
 void scheduler();
 
 //	HELPER METHODS	------------------------------------------------------------
+
+//	Write time row to file
+void writeTime();
+//	Greatest Common Divisor (needed for LCM)
 int gcd(int a, int b);
+//	Calculate Least Common Multiple of the tasks' period lengths
 int findLCM();
+//	Recursive Bubble Sort function to sort the tasks based on period lengths
 void bubbleSort(int n);
+
 
 //	============================================================================
 //	STRUCTS
@@ -63,12 +72,12 @@ typedef struct taskProc{
     char* name;	//	Name of Task
     int wcet;	//	The WCET of task
     int per;	//	The period length of task
-    int loc;	// 	The current location (how much time has passed) within task
-    int counter;
+    int loc;	// 	The current location, or how much time was applied towards task
+    int counter;	//	Counter to keep track of time into the task's period
 } taskProc;
 
 
-//	============================================================================
+//	===========================================================================
 //	MAIN
 //
 int main(int argc, char *argv[])
@@ -76,24 +85,33 @@ int main(int argc, char *argv[])
 	//	The thread identifiers
 	pthread_t* pt;	//	task thread
 
-	prior = malloc(sizeof(int)*numTasks);
-	t = malloc(sizeof(taskProc)*numTasks);
-	t[0].name = "T1";
-	t[0].wcet = 2;
-	t[0].per = 6;
+	FILE* taskSet;	//	Input file
+  taskSet = fopen(argv[2], "r");	//	Open the file
+	char fl[32], name[2];	//	Character buffers for file search
+	int x = 0;	//	iterator for file
+	int wcet, period;	//	temp values for data from file
 
-	t[1].name = "T2";
-	t[1].wcet = 3;
-	t[1].per = 12;
-
-	t[2].name = "T3";
-	t[2].wcet = 6;
-	t[2].per = 24;
-
-	for(int i = 0; i < numTasks; i++)
-	{
-		prior[i] = t[i].per;
+	//	Count number of tasks in file
+	while (fgets(fl, 32, taskSet) != NULL) {
+		numTasks++;
 	}
+
+	//	Allocate memory of task object for the number of tasks found
+	t = malloc(sizeof(taskProc)*numTasks);
+
+	//	Reset file pointer to beginning
+	rewind(taskSet);
+
+	//	Read data from each line of file
+	while (fgets(fl, 32, taskSet) != NULL) {
+		sscanf(fl, "%s %d %d", name, &wcet, &period);
+		t[x].name = name;
+		t[x].wcet = wcet;
+		t[x].per = period;
+		x++;
+	}
+
+	fclose(taskSet);
 
 	//	ERROR CHECK ==============================================================
 	//	No Input
@@ -109,15 +127,10 @@ int main(int argc, char *argv[])
 	}
 
 	//	FILE / INPUTS ============================================================
-	//	Cast user inputs to int and save to global variables ---------------------
-	nper = atoi(argv[1]);	//	grab size of memory
-	taskSet = open(argv[2], O_RDONLY);
-	if (taskSet == -1)
-	{
-	printf("ERROR: Could not open the first inputted file.\n");
-	printf("       Please check if the file exists and is entered correctly.\n");
-	exit(EXIT_FAILURE);
-	}
+	//	Cast user inputs to int and save to global variables
+	nper = atoi(argv[1]);	//	grab number of hyperperiods
+
+
 
 	sched = creat(argv[3], O_WRONLY | O_APPEND);
 	if (sched == -1)
@@ -134,12 +147,13 @@ int main(int argc, char *argv[])
 	//	Allocate memory for threads
 	pt = malloc(sizeof(pthread_t)*nper);	// Size of n hyperperiods
 
+	//	--------------------------------------------------------------------------
 	//	Set all thread semaphores to 0, locked
 	for (int i = 0; i < nper; i++)
 	{
 		sem_init(&sem[0], 0, 0);
 	}
-	//	Set control semaphore to 0, lockeds
+	//	Set control semaphore to 0, locked
 	sem_init(semCon, 0 , 0);
 
 	//	Create n threads
@@ -150,23 +164,19 @@ int main(int argc, char *argv[])
 		pthread_create(&pt[i], NULL, task, id);
 	}
 
+	//	--------------------------------------------------------------------------
 	//	Start the scheduler program
 	scheduler();
 	fflush(stdout);
 
+	//	--------------------------------------------------------------------------
 	//	Allow remaining threads to exit
 	for (int i = 0; i < nper; i++)
-	{
 			sem_post(&sem[i]);
-	}
 
-	printf("joining threads\n");
 	//	Join n threads
 	for (int i = 0; i < nper; i++)
-	{
 		pthread_join(pt[i], NULL);
-	}
-
 
 	//	CLEANUP ==================================================================
 	free(t);	//	Free the thread memory
@@ -175,54 +185,154 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+
 //	============================================================================
 //	THREAD: task
 //
-//	Input: None
-//	Output:	None.
+//	Input: Argument passed from thread creation. It is the ID number for the thread
+//	Output:	Write name of thread to output file when called by scheduler.
 //
 void *task(void *vargp)
 {
-	int id = *((int *)vargp);	//	pass id from
+	//	Set thread id to passed argument (id from creating the thread)
+	int id = *((int *)vargp);
 
+	//	While scheduling is running
 	while(curr != -1)
 	{
+		//	Thread will wait until scheduler releases it
 		if(sem_wait(&sem[id]) != 0)
 		{
-			printf("Semaphore error in thread\n");
+			printf("Semaphore error in thread %d\n", id);
 			exit(EXIT_FAILURE);
 		}
 
+		//	If scheduler has finished, then don't write to file and exit loop
 		if(curr == -1)
-		{
 			break;
-		}
 
-		printf("This is the %d thread speaking!\n\n", id);
+		//	Write name of thread to file
+		sprintf(str, "%s ", t[id].name);
+		write(sched, str, strlen(str));
 
-		fflush(stdout);
+		//	Release the semaphore controler
 		sem_post(semCon);
 	}
+
 	free(vargp);	//	Free passed argument memory
 	pthread_exit(0);
 }
 
+//	============================================================================
+//	Input: None, uses global variables.
+//	Output:	Simulate RM Scheduling via threads. Each thread will be called to
+//					write out to a file at the time that it was called.
+//
 void scheduler()
 {
+	//----------------------------------------------------------------------------
 	//	Calculate LCM of tasks' periods
 	lcm = findLCM();
 	//	Sort the tasks and prioritize by least period time
 	bubbleSort(numTasks);
+	//	Write time row to file
+	writeTime();
 
+	//----------------------------------------------------------------------------
+	int cont = 1;	//	allow
+	for(int n = 0; n < nper; n++)
+	{
+		//	Main loop - Loop until ticks have reached the lcm
+		while(ticks != lcm)
+		{
+			//	Loop through the sorted tasks
+			for(int i = 0; i < numTasks; i++)
+			{
+				//	loop through number of remaining ticks until thread's wcet is reached
+				for(int j = t[i].loc; j < t[i].wcet; j++)
+				{
+					sem_post(&sem[i]);	//	unlock determined thread
+					sem_wait(semCon);	//	wait until thread gives access back to main loop
 
-	//	Write number of ticks of the hyperperiod at top of file
+					//	Iterate clock ticks and current thread's used processing time
+					ticks++;
+					t[i].loc++;
+
+					//	Iterate all threads' counters and check if any have reach their
+					//	period, if so then break out.
+					for(int k = 0; k < numTasks; k++)
+					{
+						t[k].counter++;
+						if(t[k].counter == t[k].per)
+						{
+							//	Reset thread's values if it has reached end of its period
+							t[k].loc = 0;
+							t[k].counter = 0;
+							i = -1;
+							cont = 0;
+						}
+					}
+
+					//	If previous loop determined that thread needs to break, then break
+					//	next loop level
+					if(cont == 0)
+					{
+						cont = 1;
+						break;
+					}
+				}
+			}
+
+			//	Continue iterating counters even if WCET has been reached
+			for(int k = 0; k < numTasks; k++)
+			{
+				t[k].counter++;
+				if(t[k].counter == t[k].per)
+				{
+					//	Reset thread's values if it has reached end of its period
+					t[k].loc = 0;
+					t[k].counter = 0;
+				}
+			}
+
+			//	Write blank if no thread needs to be called
+			write(sched, "--", strlen(str));
+			fflush(stdout);
+			//	Iterate clock ticks
+			ticks++;
+		}
+
+		//	Reset all thread's values when starting next hyperperiod
+		for(int k = 0; k < numTasks; k++)
+		{
+			t[k].loc = 0;
+			t[k].counter = 0;
+			ticks = 0;
+		}
+		write(sched, "\n", strlen(str));
+	}
+	write(sched, "\n", strlen(str));
+	printf("Scheduler has finished successfully.\n");
+	curr = -1;	//	Tell threads to exit
+}
+
+//  ============================================================================
+//	HELPER METHODS
+//
+
+//	----------------------------------------------------------------------------
+//	Write number of ticks of the hyperperiod at top of file
+void writeTime()
+{
 	for (int i = 0; i < lcm; i++)
 	{
+		//	For numbers of two digits, remove one space to make it easier to read
 		if(i > 9)
 		{
 			sprintf(str, "%d ", i);
 			write(sched, str, strlen(str));
 		}
+
 		else
 		{
 			sprintf(str, "%d  ", i);
@@ -230,78 +340,9 @@ void scheduler()
 		}
 	}
 	write(sched, "\n", strlen("\n"));
-
-
-	int cont = 1;
-	//int counter = 0;
-	//int currTask = prior[0].wcet;
-	//	Main loop - Loop until ticks have reached the lcm
-	while(ticks != lcm)
-	{
-		//	Loop through the sorted tasks
-		for(int i = 0; i < numTasks; i++)
-		{
-			//	loop through number of remaining ticks until wcet is reached
-			for(int j = t[i].loc; j < t[i].wcet; j++)
-			{
-				sprintf(str, "%s ", t[i].name);
-				write(sched, str, strlen(str));
-				fflush(stdout);
-				ticks++;
-				t[i].loc++;
-
-				for(int k = 0; k < numTasks; k++)
-				{
-					t[k].counter++;
-					//printf("Task %s counter is %d time: %d\n", t[k].name, t[k].counter, ticks);
-					if(t[k].counter == t[k].per)
-					{
-						//printf("Task %s reached its period at time: %d\n", t[k].name, ticks);
-						t[k].loc = 0;
-						t[k].counter = 0;
-						i = -1;
-						cont = 0;
-						//break;
-					}
-				}
-
-				if(cont == 0)
-				{
-					cont = 1;
-					break;
-				}
-			}
-		}
-
-		for(int k = 0; k < numTasks; k++)
-		{
-			t[k].counter++;
-			if(t[k].counter == t[k].per)
-			{
-				t[k].loc = 0;
-				t[k].counter = 0;
-				//i = -1;
-			}
-		}
-		//sprintf(str, "%s ");
-		write(sched, "--", strlen(str));
-		fflush(stdout);
-		ticks++;
-
-		//sem_post(&sem[curr]);	//	unlock curr thread
-		//sem_wait(semCon);	//	wait until thread gives main loop access
-
-		//printf("TICKS: %d\n", ticks);
-	}
-	write(sched, "\n", strlen(str));
-	printf("scheduler says quit\n");
-	curr = -1;
 }
 
-//  ============================================================================
-//	HELPER METHODS
-//
-
+//	----------------------------------------------------------------------------
 //	geeksforgeeks.com
 //	Function to return gcd of a and b
 int gcd(int a, int b)
@@ -311,6 +352,7 @@ int gcd(int a, int b)
     return gcd(b % a, a);
 }
 
+//	----------------------------------------------------------------------------
 //	geeksforgeeks.com
 //	Function to find lcd of array of numbers
 int findLCM()
@@ -326,6 +368,7 @@ int findLCM()
     return ans;
 }
 
+//	----------------------------------------------------------------------------
 //	geeksforgeeks.com
 //	Recursive Bubble Sorting Algorithm
 void bubbleSort(int n)
