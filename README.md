@@ -1,2 +1,2 @@
-# OS_HW05
-Operating Systems assignment 5 real-time scheduling algorithm
+# Real Time Scheduling Algorithm
+A simulated implementation of the scheduler using multithreaded programming.
